@@ -23,12 +23,13 @@ if ! command -v claude > /dev/null 2>&1; then
 fi
 
 # Build args — json mode produces ~1KB clean output
-ARGS=(-p "$PROMPT" --output-format json --cwd "$CWD")
+ARGS=(-p "$PROMPT" --output-format json)
 
+# Both modes run unattended so need --dangerously-skip-permissions.
+# "plan" vs "bypass" distinction is enforced by prompt instructions, not permission mode.
 case "$MODE" in
-  plan)   ARGS+=(--permission-mode plan) ;;
-  bypass) ARGS+=(--permission-mode bypassPermissions) ;;
-  *)      echo "ERROR: mode must be 'plan' or 'bypass'" >&2; exit 1 ;;
+  plan|bypass) ARGS+=(--dangerously-skip-permissions) ;;
+  *)           echo "ERROR: mode must be 'plan' or 'bypass'" >&2; exit 1 ;;
 esac
 
 # Handle --resume (with fallback if session_id is missing/empty)
@@ -44,8 +45,10 @@ fi
 # Clear previous output
 rm -f "$TASK_DIR/output.json"
 
-# Start CC in background (setsid detaches from terminal, /dev/null satisfies stdin check)
-setsid claude "${ARGS[@]}" < /dev/null > "$TASK_DIR/output.json" 2>&1 &
+# Start CC in background (cd to CWD first; setsid detaches from terminal; /dev/null satisfies stdin check)
+# Unset CLAUDECODE to allow launching from within a CC session (claw-pilot dogfooding)
+cd "$CWD"
+setsid env -u CLAUDECODE claude "${ARGS[@]}" < /dev/null > "$TASK_DIR/output.json" 2>&1 &
 CC_PID=$!
 
 # Brief wait + verify process is alive
