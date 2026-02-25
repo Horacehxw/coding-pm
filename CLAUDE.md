@@ -35,7 +35,10 @@ init-task.sh → start-cc.sh (plan) → [agent reviews] → start-cc.sh (bypass,
 ## Development Commands
 
 ```bash
-# Test scripts manually (there is no automated test suite)
+# Run automated tests
+bash tests/test-scripts.sh
+
+# Test scripts manually
 bash scripts/init-task.sh /path/to/project test-task "request text"
 bash scripts/init-task.sh --force /path/to/project test-task "retry"  # overwrite existing
 bash scripts/start-cc.sh ~/.openclaw/supervisor/tasks/test-task "What is 2+2?" /tmp plan
