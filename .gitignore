@@ -1,0 +1,4 @@
+# Runtime data lives in ~/.openclaw/supervisor/, not in this repo
+*.swp
+*.tmp
+.DS_Store
