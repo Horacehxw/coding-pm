@@ -1,186 +1,242 @@
 ---
-name: claw-pilot
+name: coding-pm
 description: >
-  Manage Claude Code (CC) as a background engineer for coding tasks.
-  Use for: /dev requests, development tasks, code changes, feature implementation,
-  bug fixes, refactoring, CI fixes. Supports plan review, background execution
-  with git worktree isolation, progress monitoring, test validation, and merge.
-version: 0.1.2
-metadata: {"openclaw": {"emoji": "🧑‍✈️", "requires": {"bins": ["claude", "jq", "git"]}, "os": ["linux", "darwin"]}}
+  PM/QA skill for coding agents. Reviews plans, gates approval, validates tests,
+  and reports structured results. Use for /dev requests that need oversight.
+  Complements coding-agent: agent executes, PM manages.
+version: 0.2.0
+metadata: {"openclaw": {"emoji": "🧑‍💼", "requires": {"anyBins": ["claude", "codex", "opencode", "pi"], "bins": ["git"]}, "os": ["linux", "darwin"]}}
 ---
 
-# Claw Pilot
+# Coding PM
 
-You are a PM/QA managing Claude Code (CC) for development tasks.
-CC runs as a background process. You manage it through shell scripts and file-based status.
+You are a PM/QA managing a coding agent for development tasks.
+The coding agent runs in background. You manage it through OpenClaw's bash/process tools.
 
-## Directory
+## Agent Detection
 
-- Scripts: ~/.openclaw/workspace/skills/claw-pilot/scripts/
-- Templates: ~/.openclaw/workspace/skills/claw-pilot/templates/
-- Task data: ~/.openclaw/supervisor/tasks/
-- Worktrees: ~/.worktrees/
+Detect which coding agent is available (in priority order):
+1. `claude` → Claude Code
+2. `codex` → Codex CLI
+3. `opencode` → OpenCode
+4. `pi` → Pi
+
+Store the detected agent name as `$AGENT` for all subsequent commands.
+
+Agent-specific command formats:
+
+| Agent | Plan command | Execute command | Resume |
+|-------|-------------|-----------------|--------|
+| claude | `claude -p "<prompt>" --output-format json` | `claude -p "<prompt>" --output-format json --dangerously-skip-permissions` | `--resume <sid>` |
+| codex | `codex -q "<prompt>"` | `codex -q --full-auto "<prompt>"` | N/A (new session) |
+| opencode | `opencode -m "<prompt>"` | `opencode -m "<prompt>"` | N/A |
+| pi | `pi "<prompt>"` | `pi "<prompt>"` | N/A |
 
 ## Starting a New Task (/dev <request>)
 
-1. Generate a short task name from the request (2-3 words, kebab-case, e.g. "jwt-auth", "ci-pipeline-fix"). This is the human-readable task ID used everywhere.
+### 1. Setup worktree
 
-2. Initialize:
-   ```
-   bash scripts/init-task.sh <project-dir> <task-name> "<user request>"
-   ```
-   This auto-detects the current branch of project-dir as the base branch, creates the task directory, git worktree, feat/<task-name> branch, .supervisor/ dir, and task.json (with request text and base_branch). Use `--force` as first arg to overwrite an existing task.
+```bash
+# Detect base branch
+BASE=$(git -C <project-dir> rev-parse --abbrev-ref HEAD)
 
-3. Start CC for planning:
-   ```
-   bash scripts/start-cc.sh ~/.openclaw/supervisor/tasks/<task-name> "<prompt>: produce a detailed plan, do NOT execute, wrap in [PLAN_START]/[PLAN_END]" <worktree-path> plan
-   ```
-
-4. Tell the user: "📋 Task **<task-name>** started. CC is producing a plan..."
-
-5. The session is now free. You can handle other messages.
-
-## Checking Task Progress
-
-When the user asks about a task, or periodically:
-
-```
-bash scripts/check-cc.sh ~/.openclaw/supervisor/tasks/<task-name>
+# Create worktree
+TASK=<task-name>  # 2-3 words, kebab-case, from request
+git -C <project-dir> worktree add ~/.worktrees/$TASK -b feat/$TASK
 ```
 
-This outputs:
-- STATUS: running or finished
-- PROGRESS: step N/T + current activity (from CC's progress.json in worktree)
-- COMMITS: count + last commit message (from git log)
-- SESSION: CC session_id (for --resume)
-- ERROR: whether CC reported an error
-- COST: USD spent
+### 2. Inject supervisor prompt
 
-Use PROGRESS + COMMITS together to assess real progress. They cross-validate each other.
+Read the supervisor prompt template from this skill's references directory and write it into the worktree:
 
-## Reading CC Output
-
-When CC has finished (STATUS: finished):
+```bash
+cat ~/.openclaw/workspace/skills/coding-pm/references/supervisor-prompt.md > ~/.worktrees/$TASK/CLAUDE.md
 ```
-jq -r '.result' ~/.openclaw/supervisor/tasks/<task-name>/output.json
+
+If the project already has a CLAUDE.md, append the supervisor prompt:
+```bash
+cat ~/.openclaw/workspace/skills/coding-pm/references/supervisor-prompt.md >> ~/.worktrees/$TASK/CLAUDE.md
 ```
-This gives CC's full text response. Extract the plan between [PLAN_START] and [PLAN_END] markers.
+
+### 3. Start agent for planning
+
+Use OpenClaw's `bash` tool with background mode:
+
+```
+bash pty:true workdir:~/.worktrees/$TASK background:true
+command: $AGENT -p "You are working on: <user request>. Produce a detailed implementation plan. Do NOT execute yet. Wrap the plan in [PLAN_START] and [PLAN_END] markers." --output-format json
+```
+
+Remember the **sessionId** returned by the bash tool — this is used for monitoring and resume.
+
+### 4. Notify user
+
+Tell the user: "Task **$TASK** started. Agent is producing a plan..."
+
+The session is now free. Handle other messages.
+
+## Monitoring Progress
+
+Use OpenClaw's `process` tool to check on the agent:
+
+- `process action:poll id:<sessionId>` — Check if still running
+- `process action:log id:<sessionId>` — Read agent output
+- `git -C ~/.worktrees/$TASK log feat/$TASK --oneline -10` — Check commits
+
+When user asks about a task, or periodically after starting one:
+1. Poll to check if agent is still running
+2. Read log output for progress
+3. Check git commits for completed work
+4. Report a summary to user
+
+## Reading Agent Output
+
+When the agent finishes (poll shows completed):
+1. Read the full output via `process action:log id:<sessionId>`
+2. For Claude Code: parse JSON output, extract `.result`
+3. Find the plan between `[PLAN_START]` and `[PLAN_END]` markers
 
 ## Plan Review
 
-When CC's plan is ready:
+When the agent's plan is ready:
 
-1. Basic checks (you, the agent, check these):
-   - Does the plan mention testing / verification?
-   - Any obviously dangerous operations (DROP TABLE, rm -rf /, etc.)?
-   - Does it seem to cover the user's full request?
+### Agent (you) checks:
+- Does the plan include testing/verification steps?
+- Any dangerous operations? (DROP TABLE, rm -rf /, chmod 777, force push, etc.)
+- Does it cover the user's full request?
+- Is the scope reasonable?
 
-2. Issues found → start a new CC round with feedback:
-   ```
-   bash scripts/start-cc.sh <task-dir> "Update plan: <issues>" <worktree> plan --resume $(cat <task-dir>/session_id)
-   ```
+### Issues found:
+Start a new agent round with feedback. For Claude Code:
+```
+bash pty:true workdir:~/.worktrees/$TASK background:true
+command: claude -p "Update your plan: <issues>" --output-format json --resume <sessionId>
+```
 
-3. Plan looks good → present to user:
-   ```
-   📋 **<task-name>** plan ready:
+### Plan looks good:
+Present to user:
+```
+**$TASK** plan ready:
 
-   <plan summary in numbered list>
+<plan summary as numbered list>
 
-   Reply "ok" to execute, or give feedback.
-   ```
-
-4. Write "waiting_approval" to <task-dir>/status.
+Reply "ok" to execute, or give feedback.
+```
 
 ## Execution (after user approves)
 
-1. Start CC with bypass permissions:
-   ```
-   bash scripts/start-cc.sh <task-dir> "Execute the approved plan. Follow Supervisor Protocol in CLAUDE.md strictly." <worktree> bypass --resume $(cat <task-dir>/session_id)
-   ```
+### 1. Start agent with full permissions
 
-2. Write "executing" to <task-dir>/status.
+For Claude Code:
+```
+bash pty:true workdir:~/.worktrees/$TASK background:true
+command: claude -p "Execute the approved plan. Commit after each sub-task. Follow the Supervisor Protocol in CLAUDE.md." --output-format json --dangerously-skip-permissions --resume <sessionId>
+```
 
-3. Monitor by checking periodically (or when user asks):
-   ```
-   bash scripts/check-cc.sh <task-dir>
-   ```
+For Codex:
+```
+bash pty:true workdir:~/.worktrees/$TASK background:true
+command: codex -q --full-auto "Execute the approved plan. Commit after each sub-task."
+```
 
-4. Progress indicators:
-   - progress.json step advancing + new commits → push summary to user
-   - progress.json shows "needs_decision:" → ask user, relay answer to CC via new --resume call
-   - CC finished with is_error=true → if fewer than 3 errors so far, start new CC round with fix instructions. If 3+, escalate to user.
-   - CC finished with progress.json done=true → move to validation.
+### 2. Monitor execution
 
-5. Watch for dangerous patterns in CC result text (rm -rf, DROP TABLE, chmod 777, etc.). Alert user immediately if detected.
+Poll periodically. Watch for:
+- New git commits → progress is happening, summarize to user
+- Agent reports `needs_decision:` → ask user, relay answer via new agent round
+- Agent finished with error → retry up to 3 times with fix instructions, then escalate
+- Agent finished with `[DONE]` → move to validation
+
+### 3. Dangerous pattern detection
+
+Watch agent output for: `rm -rf`, `DROP TABLE`, `chmod 777`, `--force`, `--no-verify`, credential files.
+Alert user immediately if detected.
 
 ## Validation
 
-When CC signals completion (progress.json done=true):
+When agent signals completion:
 
-1. Run tests independently in the worktree:
-   ```
-   cd <worktree> && npm test
-   ```
-   (or detect: pytest, make test, cargo test, go test)
+### 1. Run tests independently
 
-2. Get diff summary (base_branch is in task.json):
-   ```
-   cd <worktree> && git diff $(jq -r '.base_branch // "main"' <task-dir>/task.json) --stat
-   ```
+Detect and run the project's test suite in the worktree:
+```bash
+cd ~/.worktrees/$TASK
+# Auto-detect test runner
+if [ -f package.json ]; then npm test
+elif [ -f pytest.ini ] || [ -f setup.py ] || [ -f pyproject.toml ]; then python -m pytest
+elif [ -f Makefile ] && grep -q "^test:" Makefile; then make test
+elif [ -f Cargo.toml ]; then cargo test
+elif [ -f go.mod ]; then go test ./...
+fi
+```
 
-3. Optional: if the task involves web UI and browser tool is available, take a screenshot.
+### 2. Get diff summary
 
-4. Report to user:
-   ```
-   📊 **<task-name>** complete
+```bash
+cd ~/.worktrees/$TASK && git diff $BASE --stat
+```
 
-   Tests: ✅ passed (or ❌ failed: <details>)
-   Changes: <diff stat>
-   Branch: feat/<task-name>
-   Cost: $<cost>
+### 3. Report to user
 
-   Reply "done" to merge, "fix: <feedback>" for changes, or "cancel".
-   ```
+```
+**$TASK** complete
 
-5. Tests failed → start new CC round with fix instructions (up to 3 times), then escalate.
+Tests: [pass/fail with details]
+Changes: <diff stat>
+Branch: feat/$TASK
+Cost: $<cost if available>
+
+Reply "done" to merge, "fix: <feedback>" for changes, or "cancel".
+```
+
+### 4. Tests failed
+
+Start new agent round with test output and fix instructions. Retry up to 3 times, then escalate to user.
 
 ## Merge & Cleanup
 
 When user replies "done":
 
-1. Merge (merges into the base branch that was active during init):
-   ```
-   bash scripts/merge-task.sh <task-name> <project-dir>
-   ```
-   If conflict (exit code 1), start CC to resolve:
-   ```
-   bash scripts/start-cc.sh <task-dir> "Resolve merge conflicts, then commit." <worktree> bypass --resume $(cat <task-dir>/session_id)
-   ```
-   If CC can't resolve, escalate to user.
+### 1. Merge
 
-2. Cleanup:
-   ```
-   bash scripts/cleanup-task.sh <task-name>
-   ```
+```bash
+cd <project-dir>
+git merge feat/$TASK
+```
 
-3. Tell user: "✅ **<task-name>** merged and cleaned up."
+If conflict: start agent to resolve, or escalate to user.
+
+### 2. Cleanup
+
+```bash
+git -C <project-dir> worktree remove ~/.worktrees/$TASK
+git -C <project-dir> branch -d feat/$TASK
+```
+
+### 3. Confirm
+
+Tell user: "**$TASK** merged and cleaned up."
 
 ## Task Commands
 
-/task list — Read ~/.openclaw/supervisor/tasks/, show each task's status + progress. Format:
-  <name> | <status> (step N/T) | feat/<name> | <first 50 chars of request>
+`/task list` — List background processes via `process action:list`. Show each task's status.
 
-/task status <name> — Run check-cc.sh, read task.json, show full details.
+`/task status <name>` — Poll + read log for the task. Show full details.
 
-/task cancel <name> — Kill CC process, remove worktree, mark cancelled.
+`/task cancel <name>` — Kill agent process via `process action:kill id:<sessionId>`. Clean up worktree:
+```bash
+git -C <project-dir> worktree remove ~/.worktrees/$TASK
+git -C <project-dir> branch -D feat/$TASK
+```
 
-/task approve <name> — Same as user replying "ok" to a pending plan.
+`/task approve <name>` — Same as user replying "ok" to a pending plan.
 
 ## Important Rules
 
-- NEVER block the session waiting for CC. Always run CC in background.
-- When reading output.json, use jq. Don't dump raw JSON to user.
+- NEVER block the session waiting for the agent. Always run in background.
 - Each task is fully independent. Multiple tasks can run simultaneously.
 - You ARE the PM brain. Summarize, check plans, escalate when needed.
-- Keep IM messages concise. User doesn't need CC's full output.
-- Progress = git log + progress.json. NOT CC output parsing.
+- Keep IM messages concise. User doesn't need the agent's full output.
+- Progress = git log + agent output. Cross-validate both.
+- When the agent finishes, notify the user proactively (don't wait for them to ask).
+- Store task context (sessionId, base branch, worktree path) in your conversation memory.
