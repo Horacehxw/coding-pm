@@ -30,11 +30,12 @@ SUPERVISOR_PROMPT="$(cat "$SKILL_DIR/templates/supervisor-protocol.md")"
 # Build args — json mode produces ~1KB clean output
 ARGS=(-p "$PROMPT" --output-format json --append-system-prompt "$SUPERVISOR_PROMPT")
 
-# Both modes run unattended so need --dangerously-skip-permissions.
-# "plan" vs "bypass" distinction is enforced by prompt instructions, not permission mode.
+# Both modes need --dangerously-skip-permissions for unattended execution.
+# "plan" is further restricted to read-only tools via --allowedTools.
 case "$MODE" in
-  plan|bypass) ARGS+=(--dangerously-skip-permissions) ;;
-  *)           echo "ERROR: mode must be 'plan' or 'bypass'" >&2; exit 1 ;;
+  plan)   ARGS+=(--dangerously-skip-permissions --allowedTools "Read,Glob,Grep,LS,WebSearch,WebFetch") ;;
+  bypass) ARGS+=(--dangerously-skip-permissions) ;;
+  *)      echo "ERROR: mode must be 'plan' or 'bypass'" >&2; exit 1 ;;
 esac
 
 # Handle --resume (with fallback if session_id is missing/empty)
