@@ -21,7 +21,7 @@ User (IM) → OpenClaw Agent (PM/QA, kimi-k2.5) → Claude Code (Engineer, backg
 init-task.sh → start-cc.sh (plan) → [agent reviews] → start-cc.sh (bypass, --resume) → check-cc.sh (poll) → merge-task.sh → cleanup-task.sh
 ```
 
-**Supervisor Protocol** (`templates/CLAUDE.md.tpl`) is injected into each worktree's CLAUDE.md. It tells CC to write `progress.json` and follow safety/git rules. This is the contract between PM and Engineer.
+**Supervisor Protocol** (`templates/supervisor-protocol.md`) is injected as a system prompt via `--append-system-prompt`. It tells CC to write `progress.json` and follow safety/git rules. This is the contract between PM and Engineer.
 
 **Three-layer file separation** — Different lifecycles, different locations:
 - Source: this repo (`~/.openclaw/workspace/skills/claw-pilot/`)

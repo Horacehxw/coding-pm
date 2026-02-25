@@ -25,7 +25,7 @@ if ! command -v claude > /dev/null 2>&1; then
 fi
 
 # Inject Supervisor Protocol via system prompt (not CLAUDE.md, to avoid file pollution)
-SUPERVISOR_PROMPT="$(cat "$SKILL_DIR/templates/CLAUDE.md.tpl")"
+SUPERVISOR_PROMPT="$(cat "$SKILL_DIR/templates/supervisor-protocol.md")"
 
 # Build args — json mode produces ~1KB clean output
 ARGS=(-p "$PROMPT" --output-format json --append-system-prompt "$SUPERVISOR_PROMPT")
