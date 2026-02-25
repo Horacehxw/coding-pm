@@ -1,7 +1,14 @@
 #!/bin/bash
-# Usage: init-task.sh <project-dir> <task-name> [request]
+# Usage: init-task.sh [--force] <project-dir> <task-name> [request]
 # Creates task data dir, git worktree, feature branch, and progress tracking.
 set -e
+
+# Handle --force flag
+FORCE=false
+if [ "$1" = "--force" ]; then
+  FORCE=true
+  shift
+fi
 
 PROJECT_DIR="$1"
 TASK_NAME="$2"
@@ -11,7 +18,7 @@ WORKTREE="$HOME/.worktrees/$TASK_NAME"
 
 # Validate inputs
 if [ -z "$PROJECT_DIR" ] || [ -z "$TASK_NAME" ]; then
-  echo "Usage: init-task.sh <project-dir> <task-name> [request]" >&2
+  echo "Usage: init-task.sh [--force] <project-dir> <task-name> [request]" >&2
   exit 1
 fi
 
@@ -21,16 +28,27 @@ if ! git -C "$PROJECT_DIR" rev-parse --git-dir > /dev/null 2>&1; then
   exit 1
 fi
 
-# Pre-validation: task must not already exist
+# Pre-validation: task must not already exist (unless --force)
 if [ -d "$TASK_DIR" ]; then
-  echo "ERROR: Task '$TASK_NAME' already exists at $TASK_DIR" >&2
-  exit 1
+  if [ "$FORCE" = true ]; then
+    echo "WARN: Removing existing task dir $TASK_DIR (--force)" >&2
+    rm -rf "$TASK_DIR"
+  else
+    echo "ERROR: Task '$TASK_NAME' already exists at $TASK_DIR" >&2
+    exit 1
+  fi
 fi
 
-# Pre-validation: worktree must not already exist (leftover from previous run)
+# Pre-validation: worktree must not already exist (unless --force)
 if [ -d "$WORKTREE" ]; then
-  echo "ERROR: Worktree '$WORKTREE' already exists (leftover from previous task?)" >&2
-  exit 1
+  if [ "$FORCE" = true ]; then
+    echo "WARN: Removing existing worktree $WORKTREE (--force)" >&2
+    git -C "$PROJECT_DIR" worktree remove "$WORKTREE" --force 2>/dev/null || rm -rf "$WORKTREE"
+    git -C "$PROJECT_DIR" branch -D "feat/$TASK_NAME" 2>/dev/null || true
+  else
+    echo "ERROR: Worktree '$WORKTREE' already exists (leftover from previous task?)" >&2
+    exit 1
+  fi
 fi
 
 # Create task data directory
