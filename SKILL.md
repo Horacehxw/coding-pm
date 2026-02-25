@@ -26,23 +26,18 @@ CC runs as a background process. You manage it through shell scripts and file-ba
 
 2. Initialize:
    ```
-   bash scripts/init-task.sh <project-dir> <task-name>
+   bash scripts/init-task.sh <project-dir> <task-name> "<user request>"
    ```
-   This creates the task directory under ~/.openclaw/supervisor/tasks/, git worktree under ~/.worktrees/, feat/<task-name> branch, and .supervisor/ dir in worktree.
+   This creates the task directory under ~/.openclaw/supervisor/tasks/, git worktree under ~/.worktrees/, feat/<task-name> branch, .supervisor/ dir in worktree, and task.json with the request text.
 
-3. Write task.json to ~/.openclaw/supervisor/tasks/<task-name>/:
-   ```json
-   {"name": "<task-name>", "request": "<user request>", "project": "<project-dir>", "created": "<ISO date>"}
-   ```
-
-4. Start CC for planning:
+3. Start CC for planning:
    ```
    bash scripts/start-cc.sh ~/.openclaw/supervisor/tasks/<task-name> "<prompt>: produce a detailed plan, do NOT execute, wrap in [PLAN_START]/[PLAN_END]" <worktree-path> plan
    ```
 
-5. Tell the user: "📋 Task **<task-name>** started. CC is producing a plan..."
+4. Tell the user: "📋 Task **<task-name>** started. CC is producing a plan..."
 
-6. The session is now free. You can handle other messages.
+5. The session is now free. You can handle other messages.
 
 ## Checking Task Progress
 

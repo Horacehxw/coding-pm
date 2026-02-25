@@ -31,6 +31,8 @@ if [ -n "$WORKTREE" ] && [ -d "$WORKTREE" ]; then
   PARENT_REPO=$(cd "$WORKTREE" && git rev-parse --git-common-dir 2>/dev/null | sed 's|/\.git$||')
   if [ -n "$PARENT_REPO" ]; then
     git -C "$PARENT_REPO" worktree remove "$WORKTREE" --force 2>/dev/null || true
+    # Delete the feature branch after worktree is removed
+    git -C "$PARENT_REPO" branch -d "feat/$TASK_NAME" 2>/dev/null || true
   fi
   echo "Removed worktree: $WORKTREE"
 fi
