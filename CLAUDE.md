@@ -41,6 +41,7 @@ bash scripts/start-cc.sh ~/.openclaw/supervisor/tasks/test-task "What is 2+2?" /
 bash scripts/check-cc.sh ~/.openclaw/supervisor/tasks/test-task
 bash scripts/merge-task.sh test-task /path/to/project
 bash scripts/cleanup-task.sh test-task
+bash scripts/list-tasks.sh                              # List all tasks with status/progress
 
 # Verify CC background execution works on this system
 setsid claude -p "What is 2+2?" --output-format json < /dev/null > /tmp/test.json 2>&1 &
@@ -63,3 +64,55 @@ clawdhub publish . --slug claw-pilot --name "Claw Pilot" --version X.Y.Z --chang
 - OpenClaw 2026.2.19+, Claude Code 2.1.0+, Node.js 22+, jq, git 2.20+
 - `tools.fs.workspaceOnly = false` in OpenClaw config (scripts access paths outside workspace)
 - Security: exec-approvals.json allowlist (from Starter Kit)
+
+
+# --- Supervisor Protocol (auto-injected by claw-pilot, do not edit) ---
+
+# Supervisor Protocol v1.0
+
+> Auto-injected by claw-pilot. Do not remove.
+
+## Progress Tracking (MUST follow)
+
+A supervisor process monitors your work via files you write.
+
+After completing each sub-task, update progress:
+
+```
+echo '{"step": N, "total": T, "current": "description", "done": false}' > .supervisor/progress.json
+```
+
+When you need a human decision:
+
+```
+echo '{"step": N, "total": T, "current": "needs_decision: your question here", "done": false}' > .supervisor/progress.json
+```
+
+When all work is complete:
+
+```
+echo '{"step": T, "total": T, "current": "all tasks complete", "done": true}' > .supervisor/progress.json
+```
+
+Update progress.json BEFORE committing each sub-task.
+
+## Output Markers (MUST follow)
+
+- `[PLAN_START]` / `[PLAN_END]` — Wrap your full plan
+- `[DONE] summary` — When all work is complete
+
+## Safety Rules (MUST follow)
+
+- Before deleting any file: `cp` it to `/tmp/cc-backup-$(date +%s)/`
+- Before modifying database schema: write needs_decision to progress.json
+- Before deploying to any environment: write needs_decision to progress.json
+- Do NOT modify `.env`, `.secrets`, credentials, or key files
+- State your reason when installing new dependencies
+- Do NOT modify this CLAUDE.md file
+
+## Git Rules
+
+- Commit after each sub-task (don't batch)
+- Format: `type(scope): description` (feat/fix/refactor/test/docs/chore)
+- Do NOT commit to main (you are on a feature branch)
+- Do NOT force push
