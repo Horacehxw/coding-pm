@@ -28,6 +28,9 @@ if ! git -C "$PROJECT_DIR" rev-parse --git-dir > /dev/null 2>&1; then
   exit 1
 fi
 
+# Detect current branch as base branch for later merge
+BASE_BRANCH=$(git -C "$PROJECT_DIR" symbolic-ref --short HEAD 2>/dev/null || echo "main")
+
 # Pre-validation: task must not already exist (unless --force)
 if [ -d "$TASK_DIR" ]; then
   if [ "$FORCE" = true ]; then
@@ -55,7 +58,7 @@ fi
 mkdir -p "$TASK_DIR"
 
 # Create worktree + branch
-git -C "$PROJECT_DIR" worktree add "$WORKTREE" -b "feat/$TASK_NAME" 2>&1
+git -C "$PROJECT_DIR" worktree add "$WORKTREE" -b "feat/$TASK_NAME" "$BASE_BRANCH" 2>&1
 
 # Create progress tracking dir in worktree
 mkdir -p "$WORKTREE/.supervisor"
@@ -64,7 +67,7 @@ echo '{"step": 0, "total": 0, "current": "initializing", "done": false}' \
 
 # Generate task.json
 cat > "$TASK_DIR/task.json" <<EOF
-{"name": "$TASK_NAME", "request": $(printf '%s' "$REQUEST" | jq -Rs .), "project": "$PROJECT_DIR", "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+{"name": "$TASK_NAME", "request": $(printf '%s' "$REQUEST" | jq -Rs .), "project": "$PROJECT_DIR", "base_branch": "$BASE_BRANCH", "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 EOF
 
 # Record paths
@@ -74,3 +77,4 @@ echo "planning" > "$TASK_DIR/status"
 echo "TASK_DIR=$TASK_DIR"
 echo "WORKTREE=$WORKTREE"
 echo "BRANCH=feat/$TASK_NAME"
+echo "BASE_BRANCH=$BASE_BRANCH"

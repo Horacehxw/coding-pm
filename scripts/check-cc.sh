@@ -11,6 +11,9 @@ fi
 
 WORKTREE=$(cat "$TASK_DIR/worktree" 2>/dev/null)
 
+# Read base branch from task.json (default "main" for backward compat)
+BASE_BRANCH=$(jq -r '.base_branch // "main"' "$TASK_DIR/task.json" 2>/dev/null || echo "main")
+
 # 1. Process status
 PID=$(cat "$TASK_DIR/cc.pid" 2>/dev/null)
 if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
@@ -26,7 +29,7 @@ fi
 
 # 3. Git progress (Track A: deterministic ground truth)
 if [ -n "$WORKTREE" ] && { [ -d "$WORKTREE/.git" ] || [ -f "$WORKTREE/.git" ]; }; then
-  COMMITS=$(cd "$WORKTREE" && git log --oneline main..HEAD 2>/dev/null | wc -l)
+  COMMITS=$(cd "$WORKTREE" && git log --oneline "$BASE_BRANCH..HEAD" 2>/dev/null | wc -l)
   LAST=$(cd "$WORKTREE" && git log --oneline -1 2>/dev/null)
   echo "COMMITS: $COMMITS | LAST: $LAST"
 fi
