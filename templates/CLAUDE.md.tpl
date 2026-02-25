@@ -1,7 +1,5 @@
 # Supervisor Protocol v1.0
 
-> Auto-injected by claw-pilot. Do not remove.
-
 ## Progress Tracking (MUST follow)
 
 A supervisor process monitors your work via files you write.
@@ -38,7 +36,6 @@ Update progress.json BEFORE committing each sub-task.
 - Before deploying to any environment: write needs_decision to progress.json
 - Do NOT modify `.env`, `.secrets`, credentials, or key files
 - State your reason when installing new dependencies
-- Do NOT modify this CLAUDE.md file
 
 ## Git Rules
 
@@ -46,4 +43,3 @@ Update progress.json BEFORE committing each sub-task.
 - Format: `type(scope): description` (feat/fix/refactor/test/docs/chore)
 - Do NOT commit to main (you are on a feature branch)
 - Do NOT force push
-- Do NOT commit changes to CLAUDE.md (it contains injected protocol for this worktree only)

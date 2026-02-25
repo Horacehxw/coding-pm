@@ -10,6 +10,8 @@ CWD="$3"
 MODE="$4"
 shift 4
 
+SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
 # Validate inputs
 if [ -z "$TASK_DIR" ] || [ -z "$PROMPT" ] || [ -z "$CWD" ] || [ -z "$MODE" ]; then
   echo "Usage: start-cc.sh <task-dir> <prompt> <cwd> <mode> [--resume <session_id>]" >&2
@@ -22,8 +24,11 @@ if ! command -v claude > /dev/null 2>&1; then
   exit 1
 fi
 
+# Inject Supervisor Protocol via system prompt (not CLAUDE.md, to avoid file pollution)
+SUPERVISOR_PROMPT="$(cat "$SKILL_DIR/templates/CLAUDE.md.tpl")"
+
 # Build args — json mode produces ~1KB clean output
-ARGS=(-p "$PROMPT" --output-format json)
+ARGS=(-p "$PROMPT" --output-format json --append-system-prompt "$SUPERVISOR_PROMPT")
 
 # Both modes run unattended so need --dangerously-skip-permissions.
 # "plan" vs "bypass" distinction is enforced by prompt instructions, not permission mode.
