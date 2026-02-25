@@ -46,7 +46,7 @@ echo '{"step": 0, "total": 0, "current": "initializing", "done": false}' \
 
 # Generate task.json
 cat > "$TASK_DIR/task.json" <<EOF
-{"name": "$TASK_NAME", "request": $(echo "$REQUEST" | jq -Rs .), "project": "$PROJECT_DIR", "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+{"name": "$TASK_NAME", "request": $(printf '%s' "$REQUEST" | jq -Rs .), "project": "$PROJECT_DIR", "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 EOF
 
 # Record paths
