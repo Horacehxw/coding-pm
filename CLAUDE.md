@@ -25,11 +25,26 @@ User (IM) → coding-pm (PM/QA, OpenClaw agent) → coding-agent (Engineer, back
 
 **Flow**: `/dev <request>` → explore project → structured prompt → coding-agent plans → PM reviews (requirements, tests, risks) → user approves → coding-agent executes → PM monitors (active loop) → acceptance testing (automated + functional + visual) → user confirms → merge & cleanup.
 
-## Development Commands
+## Development Workflow
+
+```
+~/Projects/coding-pm/                          ← git repo, develop here
+    ↓ symlink
+~/.openclaw/workspace/skills/coding-pm         ← OpenClaw reads from here
+```
+
+Branch freely in `~/Projects/coding-pm/`. OpenClaw always sees whatever branch is checked out.
 
 ```bash
-# Publish
-clawdhub publish . --slug coding-pm --name "Coding PM" --version X.Y.Z --changelog "..."
+# Run component tests during development
+bash tests/smoke.sh
+
+# Generate e2e test prompt before release (paste into OpenClaw)
+bash tests/generate-e2e-prompt.sh           # fast: CLI todo app
+bash tests/generate-e2e-prompt.sh holdem    # comprehensive: Texas Holdem
+
+# Publish to ClawdHub
+clawhub publish . --slug coding-pm --name "Coding PM" --version X.Y.Z --changelog "..."
 ```
 
 ## Conventions
@@ -53,51 +68,21 @@ clawdhub publish . --slug coding-pm --name "Coding PM" --version X.Y.Z --changel
 - **Phase 3 (execution) and Phase 4 (fix) commands: DO NOT use `--output-format json`** — PM monitors the coding-agent in real-time via `process action:log`, parsing streaming output for markers (`[CHECKPOINT]`, `[DONE]`, `[ERROR]`, `[DECISION_NEEDED]`). With `--output-format json`, Claude buffers all output and only emits a single JSON blob at the end, making real-time monitoring impossible.
 
 
-## Integration Testing
+## Testing
 
-Before publishing a new version, validate the full workflow end-to-end.
-
-### End-to-end test: Texas Holdem game
-
-Validates that coding-pm can manage a complete development lifecycle:
-
-1. **Setup**: Create an empty project with `git init`
-2. **Invoke**: `/dev "Build a Texas Holdem poker game for 2-8 players with a web GUI. Use HTML/CSS/JS with a Node.js backend. Include game logic (dealing, betting rounds, hand evaluation), a responsive web interface showing player hands and community cards, and WebSocket-based multiplayer."`
-3. **Verify each phase**:
-   - Phase 1: Worktree created at `~/.worktrees/texas-holdem/`, coding-agent starts planning
-   - Phase 2: Plan includes game logic, UI components, WebSocket server, test strategy — PM reviews and presents
-   - Phase 3: Coding-agent executes, PM monitors checkpoints and dangerous patterns
-   - Phase 4: Automated tests pass, dev server starts, UI renders correctly (screenshot if available)
-   - Phase 5: Merge and cleanup succeed — no worktree/branch artifacts remain
-4. **Success criteria**:
-   - Game runs at `localhost:3000` (or similar)
-   - 2-8 players can join and play
-   - Cards deal correctly, betting rounds work, hand evaluation is accurate
-   - Web UI shows player hands, community cards, pot, and game state
-
-### Smoke test: Claude CLI flags
-
-Quick validation that coding-pm's CLI invocations work correctly:
+### Component tests (during development)
 
 ```bash
-# Planning phase — read-only tools should work
-claude -p "List files in this directory" \
-  --output-format json \
-  --dangerously-skip-permissions \
-  --allowedTools "Read,Glob,Grep,LS,Bash(git log *,git diff *)"
-
-# Planning phase — write tools should be blocked
-claude -p "Create a file called test.txt" \
-  --output-format json \
-  --dangerously-skip-permissions \
-  --allowedTools "Read,Glob,Grep,LS"
-# Agent should not be able to create files (no Write tool)
+bash tests/smoke.sh
 ```
 
-### Subagent test approach
+Validates: unicode control chars, version consistency, supervisor prompt, `--output-format json` discipline, required files, worktree lifecycle.
 
-For CI or automated validation, launch a Claude Code subagent as coding-pm:
-- `claude -p "<task prompt>" --append-system-prompt-file SKILL.md` to simulate PM role
-- Have it manage another claude instance as the coding-agent
-- Verify the full 5-phase workflow completes
-- Tests prompt quality and workflow logic end-to-end
+### E2E test (before release)
+
+```bash
+bash tests/generate-e2e-prompt.sh          # fast: CLI todo app
+bash tests/generate-e2e-prompt.sh holdem   # comprehensive: Texas Holdem
+```
+
+Generates a structured prompt + checklist to paste into OpenClaw. Tests the full 5-phase workflow through the actual platform. Cannot be automated — OpenClaw's tool semantics (bash pty/background, process poll/log/kill) differ from Claude Code's tools.
