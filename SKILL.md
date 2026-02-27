@@ -53,7 +53,22 @@ Use `$SUPERVISOR_PROMPT` in all subsequent `--append-system-prompt-file` argumen
 
 When a user sends `/dev <request>`:
 
-### 1. Explore project context
+### 1. Determine project location
+
+Determine `<project-dir>` before doing anything else:
+
+- **User specifies a path** (e.g., `/dev "Add auth" project:~/Projects/my-api`) → use that path
+- **Request implies new project** (keywords: "build", "create", "make", "start", "new") → propose creating at `~/Projects/<task-name>/`:
+  ```bash
+  mkdir -p ~/Projects/<task-name>
+  cd ~/Projects/<task-name> && git init && git commit --allow-empty -m "init"
+  ```
+  Confirm with user: "I'll create a new project at `~/Projects/<task-name>/`. OK?"
+- **Ambiguous** → ask the user: "Which project should I work on? Send a path, or I can create a new one."
+
+Store `<project-dir>` in conversation memory for this task.
+
+### 2. Explore project context
 
 Search the project to understand its structure:
 ```bash
@@ -65,7 +80,7 @@ cat <project-dir>/package.json 2>/dev/null || cat <project-dir>/pyproject.toml 2
 
 Identify: project type, language, framework, test runner, relevant directories.
 
-### 2. Setup worktree
+### 3. Setup worktree
 
 ```bash
 # Detect base branch
@@ -79,7 +94,7 @@ git -C <project-dir> worktree add ~/.worktrees/$TASK -b feat/$TASK
 mkdir -p ~/.worktrees/$TASK/.supervisor
 ```
 
-### 3. Start coding-agent for planning
+### 4. Start coding-agent for planning
 
 Compose a structured prompt with project context:
 
@@ -101,7 +116,7 @@ Instructions:
 
 Remember the **sessionId** returned by the bash tool.
 
-### 4. Notify user
+### 5. Notify user
 
 Tell the user: "Task **$TASK** started. Coding-agent is researching and producing a plan..."
 

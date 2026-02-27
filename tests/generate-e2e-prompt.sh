@@ -2,6 +2,9 @@
 # Generate a structured e2e test prompt for OpenClaw testing
 # Usage: bash tests/generate-e2e-prompt.sh [project-type]
 # project-type: "todo" (default, fast) or "holdem" (comprehensive, slow)
+#
+# Output: a single /dev command to paste into IM + a verification checklist.
+# The PM will create the project automatically (no terminal setup needed).
 
 set -euo pipefail
 
@@ -21,60 +24,49 @@ cat <<HEADER
 
 HEADER
 
-# --- Step 1: Setup test project ---
-cat <<'SETUP'
-━━━ Step 1: Create test project ━━━
-
-Run in terminal:
-
-  mkdir -p /tmp/coding-pm-e2e-test && cd /tmp/coding-pm-e2e-test
-  git init && echo '{}' > package.json && git add . && git commit -m "init"
-
-SETUP
-
-# --- Step 2: Dev command ---
-echo "━━━ Step 2: Send to OpenClaw ━━━"
+# --- Step 1: Send to OpenClaw ---
+echo "━━━ Step 1: Paste in IM ━━━"
 echo ""
 
 if [ "$PROJECT_TYPE" = "holdem" ]; then
     cat <<'HOLDEM'
-Paste in IM:
-
-  /dev "Build a Texas Holdem poker game for 2-8 players with a web GUI.
-  Use HTML/CSS/JS with a Node.js backend. Include game logic (dealing,
-  betting rounds, hand evaluation), a responsive web interface showing
-  player hands and community cards, and WebSocket-based multiplayer.
-  Include unit tests with Jest."
-
-  Project: /tmp/coding-pm-e2e-test
+/dev "Build a Texas Holdem poker game for 2-8 players with a web GUI.
+Use HTML/CSS/JS with a Node.js backend. Include game logic (dealing,
+betting rounds, hand evaluation), a responsive web interface showing
+player hands and community cards, and WebSocket-based multiplayer.
+Include unit tests with Jest."
 
 HOLDEM
 else
     cat <<'TODO'
-Paste in IM:
-
-  /dev "Build a CLI todo app in Node.js. Commands: add <text>, list,
-  complete <id>, delete <id>. Store todos in a JSON file (todos.json).
-  Include unit tests with Jest. Add a --help flag."
-
-  Project: /tmp/coding-pm-e2e-test
+/dev "Build a CLI todo app in Node.js. Commands: add <text>, list,
+complete <id>, delete <id>. Store todos in a JSON file (todos.json).
+Include unit tests with Jest. Add a --help flag."
 
 TODO
 fi
 
-# --- Step 3: Verification checklist ---
-cat <<CHECKLIST
-━━━ Step 3: Verify each phase ━━━
+cat <<'NOTE'
+The PM should ask where to create the project or propose ~/Projects/<task-name>/.
+Reply "ok" to confirm.
+
+NOTE
+
+# --- Step 2: Verification checklist ---
+cat <<'CHECKLIST'
+━━━ Step 2: Verify each phase ━━━
 
 Phase 1 — Preprocessing:
+  □ PM determined project location (asked you or proposed ~/Projects/<task>/)
+  □ PM created new project with git init
   □ PM reports "Task started, coding-agent is researching..."
-  □ Worktree exists: ls ~/.worktrees/  (should see task dir)
-  □ Feature branch created: git -C /tmp/coding-pm-e2e-test branch
+  □ Worktree created: /task list shows the task
 
 Phase 2 — Plan Review:
   □ PM presents a numbered plan summary (not raw agent output)
   □ Plan includes test strategy
   □ PM waited for your approval before execution
+  □ Reply "ok" to approve
 
 Phase 3 — Execution Monitoring:
   □ PM sends checkpoint updates during execution
@@ -87,19 +79,22 @@ Phase 4 — Acceptance Testing:
   □ If tests failed: PM sent failures to coding-agent for fixing
 
 Phase 5 — Merge & Cleanup:
-  □ After you reply "done": code merged to main branch
-  □ Worktree removed: ls ~/.worktrees/  (task dir gone)
-  □ Feature branch deleted: git -C /tmp/coding-pm-e2e-test branch
+  □ Reply "done" when PM reports completion
+  □ Code merged to main branch
+  □ Worktree removed, feature branch deleted
+  □ /task list shows no active tasks
 
 CHECKLIST
 
-# --- Step 4: Functional verification ---
-echo "━━━ Step 4: Functional verification ━━━"
+# --- Step 3: Functional verification ---
+echo "━━━ Step 3: Functional verification (after merge) ━━━"
+echo ""
+echo "Run in terminal to verify the built project works:"
 echo ""
 
 if [ "$PROJECT_TYPE" = "holdem" ]; then
     cat <<'HOLDEM_VERIFY'
-  cd /tmp/coding-pm-e2e-test
+  cd ~/Projects/<task-name>       # PM told you the path
   npm install && npm test          # unit tests pass
   npm start &                      # start server
   open http://localhost:3000       # UI renders
@@ -109,7 +104,7 @@ if [ "$PROJECT_TYPE" = "holdem" ]; then
 HOLDEM_VERIFY
 else
     cat <<'TODO_VERIFY'
-  cd /tmp/coding-pm-e2e-test
+  cd ~/Projects/<task-name>       # PM told you the path
   npm install && npm test          # unit tests pass
   node cli.js add "Buy milk"      # add a todo
   node cli.js add "Walk the dog"  # add another
@@ -121,14 +116,5 @@ else
 
 TODO_VERIFY
 fi
-
-# --- Step 5: Cleanup ---
-cat <<'CLEANUP'
-
-━━━ Step 5: Cleanup ━━━
-
-  rm -rf /tmp/coding-pm-e2e-test
-
-CLEANUP
 
 echo "━━━ Test complete ━━━"
